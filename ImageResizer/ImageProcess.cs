@@ -1,8 +1,11 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Linq;
 
 namespace ImageResizer
 {
@@ -20,12 +23,13 @@ namespace ImageResizer
             }
             else
             {
-                var allImageFiles = Directory.GetFiles(destPath, "*", SearchOption.AllDirectories);
-
-                foreach (var item in allImageFiles)
-                {
-                    File.Delete(item);
-                }
+                DirectoryInfo di = new DirectoryInfo(destPath);
+                var files = di.GetFiles();
+                Stopwatch sw = new Stopwatch();
+                sw.Start();
+                files.AsParallel().ForAll((f) => f.Delete());
+                sw.Stop();
+                Console.WriteLine($"刪檔花費時間: {sw.ElapsedMilliseconds} ms");
             }
         }
 
