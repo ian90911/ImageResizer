@@ -43,38 +43,63 @@ namespace ImageResizer
         public async Task ResizeImages(string sourcePath, string destPath, double scale)
         {
             var allFiles = FindImages(sourcePath);
-            Task[] getImgTasks = new Task[allFiles.Length];
-            Task[] getFilePathTasks = new Task[allFiles.Length];
-            Task[] resizeTasks = new Task[allFiles.Length];
             Image[] imgPhotos = new Image[allFiles.Length];
             string[] imgNames = new string[allFiles.Length];
-            for (int i = 0; i < allFiles.Length; i++)
-            {
-                int index = i;
-                getImgTasks[i] = Task.Run(() => {
-                    imgPhotos[index] = Image.FromFile(allFiles[index]);
-                });
-                getFilePathTasks[i] = Task.Run(() => {
-                    imgNames[index] = Path.GetFileNameWithoutExtension(allFiles[index]);
-                });
-            }
-            await Task.WhenAll(getImgTasks.Concat(getFilePathTasks));
+            //await Task.Run(() => 
+            //{
+            //    for (int i = 0; i < allFiles.Length; i++)
+            //    {
+            //        imgPhotos[i] = Image.FromFile(allFiles[i]);
+            //        imgNames[i] = Path.GetFileNameWithoutExtension(allFiles[i]);
+            //    }
+            //});
 
-            imgPhotos.AsParallel().Select((imgPhoto,index)=>new {imgPhoto,index }).ForAll(async x =>
+            var files = allFiles.Select((f, index) => new { file = f, index }).AsParallel();
+            files.ForAll(f => 
+            {
+                imgPhotos[f.index] = Image.FromFile(allFiles[f.index]);
+                imgNames[f.index] = Path.GetFileNameWithoutExtension(allFiles[f.index]);
+            });
+
+            Tuple<int, int, int, int>[] specs = new Tuple<int, int, int, int>[allFiles.Length];
+            var photos = imgPhotos.Select((imgPhoto, index) => new { imgPhoto, index }).ToArray();
+            Bitmap[] pImgs = new Bitmap[photos.Length];
+
+            photos.AsParallel().ForAll(x =>
             {
                 int sourceWidth = x.imgPhoto.Width;
                 int sourceHeight = x.imgPhoto.Height;
 
                 int destionatonWidth = (int)(sourceWidth * scale);
                 int destionatonHeight = (int)(sourceHeight * scale);
-
-                Bitmap processedImage = await processBitmapAsync((Bitmap)x.imgPhoto,
-                    sourceWidth, sourceHeight,
-                    destionatonWidth, destionatonHeight);
-
-                string destFile = Path.Combine(destPath, imgNames[x.index] + ".jpg");
-                processedImage.Save(destFile, ImageFormat.Jpeg);
+                specs[x.index] = new Tuple<int, int, int, int>(sourceWidth, sourceHeight, destionatonWidth, destionatonHeight);
+                pImgs[x.index] = processBitmapAsync((Bitmap)photos[x.index].imgPhoto,
+                   specs[x.index].Item1, specs[x.index].Item2,
+                   specs[x.index].Item3, specs[x.index].Item4);
             });
+            //await Task.Run(() => 
+            //{
+            //    for(int i=0;i<photos.Count();i++)
+            //    {
+            //        Bitmap processedImage = processBitmapAsync((Bitmap)photos[i].imgPhoto,
+            //            specs[i].Item1, specs[i].Item2,
+            //            specs[i].Item3, specs[i].Item4);
+
+            //        string destFile = Path.Combine(destPath, imgNames[photos[i].index] + ".jpg");
+            //        processedImage.Save(destFile, ImageFormat.Jpeg);
+            //    }
+            //});
+            Task[] saveTasks = new Task[photos.Length];
+            for (int i = 0; i < photos.Count(); i++)
+            {
+                int index = i;
+                saveTasks[i] = Task.Run(() => 
+                {
+                    string destFile = Path.Combine(destPath, imgNames[photos[index].index] + ".jpg");
+                    photos[index].imgPhoto.Save(destFile, ImageFormat.Jpeg);
+                });
+            }
+            await Task.WhenAll(saveTasks);
         }
 
         /// <summary>
@@ -86,7 +111,7 @@ namespace ImageResizer
         {
             List<string> files = new List<string>();
             DirectoryInfo di = new DirectoryInfo(srcPath);
-            var fileInfos = di.GetFiles().AsParallel().Where(f => f.Extension == ".png" || f.Extension == ".jpg" || f.Extension == ".jpeg").Select(f=>f.FullName);
+            var fileInfos = di.GetFiles().Where(f => f.Extension == ".png" || f.Extension == ".jpg" || f.Extension == ".jpeg").Select(f=>f.FullName).AsParallel();
             files.AddRange(fileInfos);
             return files.ToArray();
         }
@@ -100,21 +125,18 @@ namespace ImageResizer
         /// <param name="newWidth">新圖片的寬度</param>
         /// <param name="newHeight">新圖片的高度</param>
         /// <returns></returns>
-        async Task<Bitmap> processBitmapAsync(Bitmap img, int srcWidth, int srcHeight, int newWidth, int newHeight)
+        Bitmap processBitmapAsync(Bitmap img, int srcWidth, int srcHeight, int newWidth, int newHeight)
         {
-            return await Task.Run(() => 
-            {
-                Bitmap resizedbitmap = new Bitmap(newWidth, newHeight);
-                Graphics g = Graphics.FromImage(resizedbitmap);
-                g.InterpolationMode = InterpolationMode.High;
-                g.SmoothingMode = SmoothingMode.HighQuality;
-                g.Clear(Color.Transparent);
-                g.DrawImage(img,
-                    new Rectangle(0, 0, newWidth, newHeight),
-                    new Rectangle(0, 0, srcWidth, srcHeight),
-                    GraphicsUnit.Pixel);
-                return resizedbitmap;
-            });
+            Bitmap resizedbitmap = new Bitmap(newWidth, newHeight);
+            Graphics g = Graphics.FromImage(resizedbitmap);
+            g.InterpolationMode = InterpolationMode.High;
+            g.SmoothingMode = SmoothingMode.HighQuality;
+            g.Clear(Color.Transparent);
+            g.DrawImage(img,
+                new Rectangle(0, 0, newWidth, newHeight),
+                new Rectangle(0, 0, srcWidth, srcHeight),
+                GraphicsUnit.Pixel);
+            return resizedbitmap;
         }
 
         void getImageFromFile(Image[] imgArray, string[] filePathArray, int index)
