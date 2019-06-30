@@ -1,4 +1,5 @@
-﻿using System;
+﻿using BenchmarkDotNet.Attributes;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -12,6 +13,14 @@ namespace ImageResizer
 {
     public class ImageProcess
     {
+        [Benchmark]
+        public async Task Run()
+        {
+            string sourcePath = Path.Combine(Environment.CurrentDirectory, "images");
+            string destinationPath = Path.Combine(Environment.CurrentDirectory, "output");
+            await ResizeImagesAsync(sourcePath, destinationPath, 2.0);
+        }
+
         /// <summary>
         /// 清空目的目錄下的所有檔案與目錄
         /// </summary>
@@ -42,45 +51,32 @@ namespace ImageResizer
         /// <param name="scale">縮放比例</param>
         public async Task ResizeImagesAsync(string sourcePath, string destPath, double scale)
         {
+            Clean(destPath);
+            Stopwatch sw = new Stopwatch();
+            sw.Start();
             var allFiles = FindImages(sourcePath);
-            Image[] imgPhotos = new Image[allFiles.Length];
-            string[] imgNames = new string[allFiles.Length];
-
-            var files = allFiles.Select((f, index) => new { file = f, index }).AsParallel();
-            files.ForAll(f => 
+            List<Task> tasks = new List<Task>();
+            allFiles.Select((f, index) => new { file = f, index }).AsParallel().ForAll(x =>
             {
-                imgPhotos[f.index] = Image.FromFile(allFiles[f.index]);
-                imgNames[f.index] = Path.GetFileNameWithoutExtension(allFiles[f.index]);
-            });
-
-            Tuple<int, int, int, int>[] specs = new Tuple<int, int, int, int>[allFiles.Length];
-            var photos = imgPhotos.Select((imgPhoto, index) => new { imgPhoto, index }).ToArray();
-            Bitmap[] pImgs = new Bitmap[photos.Length];
-
-            photos.AsParallel().ForAll(x =>
-            {
-                int sourceWidth = x.imgPhoto.Width;
-                int sourceHeight = x.imgPhoto.Height;
-
-                int destionatonWidth = (int)(sourceWidth * scale);
-                int destionatonHeight = (int)(sourceHeight * scale);
-                specs[x.index] = new Tuple<int, int, int, int>(sourceWidth, sourceHeight, destionatonWidth, destionatonHeight);
-                pImgs[x.index] = processBitmapAsync((Bitmap)photos[x.index].imgPhoto,
-                   specs[x.index].Item1, specs[x.index].Item2,
-                   specs[x.index].Item3, specs[x.index].Item4);
-            });
-            
-            Task[] saveTasks = new Task[photos.Length];
-            for (int i = 0; i < photos.Count(); i++)
-            {
-                int index = i;
-                saveTasks[i] = Task.Run(() => 
+                using (Image img = Image.FromFile(x.file))
                 {
-                    string destFile = Path.Combine(destPath, imgNames[photos[index].index] + ".jpg");
-                    photos[index].imgPhoto.Save(destFile, ImageFormat.Jpeg);
-                });
-            }
-            await Task.WhenAll(saveTasks);
+                    string name = Path.GetFileNameWithoutExtension(x.file);
+                    int sourceWidth = img.Width;
+                    int sourceHeight = img.Height;
+
+                    int destionatonWidth = (int)(sourceWidth * scale);
+                    int destionatonHeight = (int)(sourceHeight * scale);
+                    Bitmap pImg = processBitmapAsync((Bitmap)img,
+                       sourceWidth, sourceHeight,
+                       destionatonWidth, destionatonHeight);
+
+                    string destFile = Path.Combine(destPath, name + ".jpg");
+                    tasks.Add(Task.Run(() => { pImg.Save(destFile, ImageFormat.Jpeg); }));
+                }
+            });
+            await Task.WhenAll(tasks);
+            sw.Stop();
+            Console.WriteLine($"調整圖片花費時間: {sw.ElapsedMilliseconds} ms");
         }
 
         /// <summary>
@@ -92,7 +88,7 @@ namespace ImageResizer
         {
             List<string> files = new List<string>();
             DirectoryInfo di = new DirectoryInfo(srcPath);
-            var fileInfos = di.GetFiles().Where(f => f.Extension == ".png" || f.Extension == ".jpg" || f.Extension == ".jpeg").Select(f=>f.FullName).AsParallel();
+            var fileInfos = di.GetFiles().AsParallel().Where(f => f.Extension == ".png" || f.Extension == ".jpg" || f.Extension == ".jpeg").Select(f=>f.FullName);
             files.AddRange(fileInfos);
             return files.ToArray();
         }
