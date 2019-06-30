@@ -45,14 +45,6 @@ namespace ImageResizer
             var allFiles = FindImages(sourcePath);
             Image[] imgPhotos = new Image[allFiles.Length];
             string[] imgNames = new string[allFiles.Length];
-            //await Task.Run(() => 
-            //{
-            //    for (int i = 0; i < allFiles.Length; i++)
-            //    {
-            //        imgPhotos[i] = Image.FromFile(allFiles[i]);
-            //        imgNames[i] = Path.GetFileNameWithoutExtension(allFiles[i]);
-            //    }
-            //});
 
             var files = allFiles.Select((f, index) => new { file = f, index }).AsParallel();
             files.ForAll(f => 
@@ -77,18 +69,7 @@ namespace ImageResizer
                    specs[x.index].Item1, specs[x.index].Item2,
                    specs[x.index].Item3, specs[x.index].Item4);
             });
-            //await Task.Run(() => 
-            //{
-            //    for(int i=0;i<photos.Count();i++)
-            //    {
-            //        Bitmap processedImage = processBitmapAsync((Bitmap)photos[i].imgPhoto,
-            //            specs[i].Item1, specs[i].Item2,
-            //            specs[i].Item3, specs[i].Item4);
-
-            //        string destFile = Path.Combine(destPath, imgNames[photos[i].index] + ".jpg");
-            //        processedImage.Save(destFile, ImageFormat.Jpeg);
-            //    }
-            //});
+            
             Task[] saveTasks = new Task[photos.Length];
             for (int i = 0; i < photos.Count(); i++)
             {
@@ -137,11 +118,6 @@ namespace ImageResizer
                 new Rectangle(0, 0, srcWidth, srcHeight),
                 GraphicsUnit.Pixel);
             return resizedbitmap;
-        }
-
-        void getImageFromFile(Image[] imgArray, string[] filePathArray, int index)
-        {
-            imgArray[index] = Image.FromFile(filePathArray[index]);
         }
     }
 }

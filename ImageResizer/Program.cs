@@ -21,7 +21,7 @@ namespace ImageResizer
             //調整前:3572ms
             Stopwatch sw = new Stopwatch();
             sw.Start();
-            await imageProcess.ResizeImages(sourcePath, destinationPath, 2.0);
+            await imageProcess.ResizeImagesAsync(sourcePath, destinationPath, 2.0);
             sw.Stop();
 
             Console.WriteLine($"調整圖片花費時間: {sw.ElapsedMilliseconds} ms");
