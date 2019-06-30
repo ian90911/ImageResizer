@@ -40,7 +40,7 @@ namespace ImageResizer
         /// <param name="sourcePath">圖片來源目錄路徑</param>
         /// <param name="destPath">產生圖片目的目錄路徑</param>
         /// <param name="scale">縮放比例</param>
-        public async Task ResizeImages(string sourcePath, string destPath, double scale)
+        public async Task ResizeImagesAsync(string sourcePath, string destPath, double scale)
         {
             var allFiles = FindImages(sourcePath);
             Image[] imgPhotos = new Image[allFiles.Length];
